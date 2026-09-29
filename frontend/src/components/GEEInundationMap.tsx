@@ -83,13 +83,12 @@ export function GEEInundationMap({
         }
       });
 
-      // Default Base Tile: CartoDB Dark Matter
+      // Default Base Tile: ESRI World Dark Gray Canvas (No API key required)
       const darkTile = L.tileLayer(
-        "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+        "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
         {
-          maxZoom: 19,
-          subdomains: "abcd",
-          attribution: "&copy; OpenStreetMap &copy; CARTO"
+          maxZoom: 18,
+          attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ"
         }
       ).addTo(map);
 
@@ -144,7 +143,7 @@ export function GEEInundationMap({
         map.removeLayer(baseTileRef.current);
       }
 
-      let newTileUrl = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+      let newTileUrl = "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}";
       let subdomains = "abcd";
 
       if (activeBaseLayer === "satellite") {
@@ -156,7 +155,7 @@ export function GEEInundationMap({
       }
 
       const newTile = L.tileLayer(newTileUrl, {
-        maxZoom: 19,
+        maxZoom: 18,
         subdomains: subdomains,
       }).addTo(map);
 
