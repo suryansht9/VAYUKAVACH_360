@@ -30,8 +30,8 @@ env/
 ENV/
 .venv/
 .env/
-Lib/
-Scripts/
+/Lib/
+/Scripts/
 
 # ── Environment / Secrets (NEVER upload these) ───────────────
 .env
