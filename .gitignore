@@ -1,0 +1,101 @@
+# ============================================================
+#  VAYUKAVACH-360 — .gitignore
+#  This file ONLY controls what gets uploaded to GitHub.
+#  It has ZERO effect on local development or project running.
+# ============================================================
+
+
+# ── Python ──────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+eggs/
+parts/
+var/
+sdist/
+wheels/
+pip-wheel-metadata/
+.installed.cfg
+
+# Virtual Environments
+venv/
+env/
+ENV/
+.venv/
+.env/
+Lib/
+Scripts/
+
+# ── Environment / Secrets (NEVER upload these) ───────────────
+.env
+.env.local
+.env.development
+.env.production
+.env.staging
+*.env
+service_account.json
+gcp_credentials.json
+google_credentials.json
+credentials.json
+secrets.json
+*.pem
+*.key
+*.p12
+
+# ── Node.js / Next.js ────────────────────────────────────────
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+frontend/out/
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.yarn-integrity
+.pnp.*
+
+# Next.js build output
+frontend/.next/
+frontend/out/
+
+# ── OS Files ─────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+Desktop.ini
+
+# ── IDE / Editor ─────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# ── Docker ───────────────────────────────────────────────────
+# (docker-compose.yml is kept — it's needed for deployment)
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+logs/
+*.log.*
+
+# ── Misc ─────────────────────────────────────────────────────
+.cache/
+.temp/
+tmp/

@@ -1,0 +1,68 @@
+{
+  "cyclone_id": "BOB-2026-05",
+  "name": "Super Cyclone VAYU-KAVACH",
+  "category": "Extremely Severe Cyclonic Storm (Category 4 Equivalent)",
+  "max_sustained_wind_knots": 115,
+  "max_sustained_wind_kmh": 213,
+  "central_pressure_hpa": 942,
+  "estimated_landfall_time": "2026-09-30T04:30:00Z",
+  "hours_to_landfall": 41.5,
+  "current_coordinates": {
+    "lat": 18.42,
+    "lon": 87.85
+  },
+  "landfall_target": {
+    "region": "Odisha-West Bengal Coast (near Paradeep / Dhamra Port)",
+    "predicted_surge_height_m": 4.2
+  },
+  "forecast_track": [
+    {
+      "timestamp": "2026-09-28T06:00:00Z",
+      "lat": 16.80,
+      "lon": 88.50,
+      "wind_kmh": 140,
+      "pressure_hpa": 970,
+      "stage": "Deep Depression"
+    },
+    {
+      "timestamp": "2026-09-28T18:00:00Z",
+      "lat": 17.60,
+      "lon": 88.20,
+      "wind_kmh": 165,
+      "pressure_hpa": 960,
+      "stage": "Very Severe Cyclonic Storm"
+    },
+    {
+      "timestamp": "2026-09-29T06:00:00Z",
+      "lat": 18.50,
+      "lon": 87.75,
+      "wind_kmh": 190,
+      "pressure_hpa": 950,
+      "stage": "Extremely Severe Cyclonic Storm"
+    },
+    {
+      "timestamp": "2026-09-29T18:00:00Z",
+      "lat": 19.40,
+      "lon": 87.10,
+      "wind_kmh": 210,
+      "pressure_hpa": 945,
+      "stage": "Peak Intensity Pre-Landfall"
+    },
+    {
+      "timestamp": "2026-09-30T06:00:00Z",
+      "lat": 20.35,
+      "lon": 86.65,
+      "wind_kmh": 213,
+      "pressure_hpa": 942,
+      "stage": "Landfall (Paradeep / Kendrapara)"
+    },
+    {
+      "timestamp": "2026-09-30T18:00:00Z",
+      "lat": 21.50,
+      "lon": 86.20,
+      "wind_kmh": 110,
+      "pressure_hpa": 985,
+      "stage": "Inland Dissipation"
+    }
+  ]
+}
