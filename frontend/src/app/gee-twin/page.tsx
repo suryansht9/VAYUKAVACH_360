@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { fetchInundation, InundationData } from "@/lib/api";
 import { 
   Layers, 
@@ -10,15 +11,27 @@ import {
   ArrowLeft, 
   Sliders, 
   MapPin, 
-  Eye, 
-  RefreshCw,
-  Compass,
   CheckCircle2,
-  AlertTriangle,
   Radio,
-  Maximize2
+  Map as MapIcon
 } from "lucide-react";
 import Link from "next/link";
+
+// Dynamically import GEEInundationMap with SSR disabled
+const GEEInundationMap = dynamic(
+  () => import("@/components/GEEInundationMap").then((mod) => mod.GEEInundationMap),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-[540px] rounded-2xl bg-[#070A12] border border-white/10 flex flex-col items-center justify-center space-y-3">
+        <div className="w-8 h-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+        <span className="text-xs font-mono text-zinc-400 font-medium tracking-wider">
+          LOADING GEE INUNDATION GIS ENGINE...
+        </span>
+      </div>
+    ),
+  }
+);
 
 const PRESET_COASTAL_LOCATIONS = [
   { name: "Paradeep Port (Odisha)", lat: 20.2684, lon: 86.6715, desc: "Mahanadi River Estuary & Major Deepwater Port" },
@@ -26,23 +39,18 @@ const PRESET_COASTAL_LOCATIONS = [
   { name: "Balasore Coast (Odisha)", lat: 21.4934, lon: 86.9135, desc: "Subarnarekha River Basin & Estuarine Mudflats" },
   { name: "Puri Sea Beach (Odisha)", lat: 19.8135, lon: 85.8312, desc: "Coastal Dune Barrier & Delta Drainage" },
   { name: "Kakinada Harbor (Andhra Pradesh)", lat: 16.9891, lon: 82.2475, desc: "Godavari Alluvial Delta & Lowland Estuary" },
+  { name: "Machilipatnam (Andhra Pradesh)", lat: 16.1875, lon: 81.1389, desc: "Krishna River Delta & Low-Lying Coastal Corridor" },
+  { name: "Chennai Port (Tamil Nadu)", lat: 13.0827, lon: 80.2707, desc: "Coromandel Coast Maritime Infrastructure" },
 ];
 
 export default function GEETwinPage() {
   const [selectedLocation, setSelectedLocation] = useState(PRESET_COASTAL_LOCATIONS[0]);
-  const [customLat, setCustomLat] = useState<number>(20.2684);
-  const [customLon, setCustomLon] = useState<number>(86.6715);
   const [surgeHeight, setSurgeHeight] = useState<number>(4.2);
   const [inundation, setInundation] = useState<InundationData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedCell, setSelectedCell] = useState<any>(null);
   const [liveAutoSync, setLiveAutoSync] = useState<boolean>(true);
   const [activeTab, setActiveTab] = useState<"map" | "grid" | "shelters">("map");
-
-  const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapInstanceRef = useRef<any>(null);
-  const surgeLayerRef = useRef<any>(null);
-  const sheltersLayerRef = useRef<any>(null);
 
   // Load Inundation Data
   useEffect(() => {
@@ -64,7 +72,9 @@ export default function GEETwinPage() {
       const data = await fetchInundation(lat, lon, h);
       setInundation(data);
       if (data.flooded_zones && data.flooded_zones.length > 0) {
-        setSelectedCell(data.flooded_zones[0]);
+        setSelectedCell((prev: any) => prev || data.flooded_zones[0]);
+      } else if (data.safe_shelter_zones && data.safe_shelter_zones.length > 0) {
+        setSelectedCell((prev: any) => prev || data.safe_shelter_zones[0]);
       }
     } catch (err) {
       console.error("Failed to fetch GEE inundation:", err);
@@ -75,130 +85,7 @@ export default function GEETwinPage() {
 
   const handleLocationChange = (loc: typeof PRESET_COASTAL_LOCATIONS[0]) => {
     setSelectedLocation(loc);
-    setCustomLat(loc.lat);
-    setCustomLon(loc.lon);
   };
-
-  const handleCustomCoordinatesSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSelectedLocation({
-      name: `Custom (${customLat.toFixed(4)}°N, ${customLon.toFixed(4)}°E)`,
-      lat: customLat,
-      lon: customLon,
-      desc: "User Specified Coastal Coordinates"
-    });
-  };
-
-  // Initialize & Update Leaflet Map
-  useEffect(() => {
-    if (typeof window === "undefined" || !mapContainerRef.current) return;
-
-    let isMounted = true;
-
-    const initMap = async () => {
-      const L = (await import("leaflet")).default;
-
-      if (!mapInstanceRef.current) {
-        const map = L.map(mapContainerRef.current!, {
-          center: [selectedLocation.lat, selectedLocation.lon],
-          zoom: 11,
-          zoomControl: false,
-          attributionControl: false,
-        });
-
-        L.control.zoom({ position: "bottomright" }).addTo(map);
-
-        L.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-          { maxZoom: 18 }
-        ).addTo(map);
-
-        surgeLayerRef.current = L.layerGroup().addTo(map);
-        sheltersLayerRef.current = L.layerGroup().addTo(map);
-
-        mapInstanceRef.current = map;
-      } else {
-        mapInstanceRef.current.setView([selectedLocation.lat, selectedLocation.lon], 11, {
-          animate: true,
-        });
-      }
-
-      // Render flooded GeoJSON / Rectangles
-      if (surgeLayerRef.current && inundation?.flooded_zones) {
-        surgeLayerRef.current.clearLayers();
-
-        inundation.flooded_zones.forEach((zone: any) => {
-          const delta = 0.010;
-          const bounds: [[number, number], [number, number]] = [
-            [zone.lat - delta, zone.lon - delta],
-            [zone.lat + delta, zone.lon + delta]
-          ];
-
-          const color = zone.surge_depth_m > 2.5 ? "#EF4444" : zone.surge_depth_m > 1.0 ? "#00F2FE" : "#3B82F6";
-
-          const rect = L.rectangle(bounds as any, {
-            color: color,
-            weight: 1,
-            fillColor: color,
-            fillOpacity: 0.45,
-          }).addTo(surgeLayerRef.current);
-
-          rect.bindPopup(`
-            <div style="color: #fff; font-family: monospace; font-size: 11px;">
-              <b style="color: #00F2FE;">CELL ${zone.cell_id || ""}</b><br/>
-              Elev: <b>${zone.elevation_m}m AMSL</b><br/>
-              Surge Depth: <b style="color: ${color}">${zone.surge_depth_m}m</b><br/>
-              Status: <span style="color: ${color}">${zone.risk_level}</span>
-            </div>
-          `);
-
-          rect.on("click", () => {
-            setSelectedCell(zone);
-          });
-        });
-      }
-
-      // Render Safe Shelter High Ground Pins
-      if (sheltersLayerRef.current && inundation?.safe_shelter_zones) {
-        sheltersLayerRef.current.clearLayers();
-
-        inundation.safe_shelter_zones.slice(0, 6).forEach((safe: any, i: number) => {
-          const shelterIcon = L.divIcon({
-            className: "safe-shelter-pin",
-            html: `
-              <div style="
-                width: 28px; height: 28px; border-radius: 50%;
-                background: #10B981; border: 2px solid #FFFFFF;
-                box-shadow: 0 0 12px #10B981;
-                display: flex; align-items: center; justify-content: center;
-                font-weight: 900; font-size: 10px; color: #000;
-              ">
-                S${i+1}
-              </div>
-            `,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-          });
-
-          L.marker([safe.lat, safe.lon], { icon: shelterIcon })
-            .addTo(sheltersLayerRef.current)
-            .bindPopup(`
-              <div style="color: #fff; font-family: monospace; font-size: 11px;">
-                <b style="color: #10B981;">SAFE HIGH GROUND ZONE #${i+1}</b><br/>
-                Elev: <b style="color: #10B981;">${safe.elevation_m}m AMSL</b><br/>
-                Safety Buffer: <b>+${(safe.elevation_m - surgeHeight).toFixed(1)}m above surge</b>
-              </div>
-            `);
-        });
-      }
-    };
-
-    initMap();
-
-    return () => {
-      isMounted = false;
-    };
-  }, [selectedLocation, inundation, surgeHeight]);
 
   const allCells = [
     ...(inundation?.flooded_zones || []),
@@ -208,7 +95,7 @@ export default function GEETwinPage() {
   return (
     <div className="min-h-screen bg-[#080A10] text-zinc-100 p-4 sm:p-6 lg:p-8 space-y-6">
       
-      {/* Header */}
+      {/* Top Header */}
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-[#0B0F1A] p-4 sm:p-5 rounded-2xl border border-white/[0.08] shadow-lg">
         <div className="flex items-center space-x-3">
           <Link
@@ -222,7 +109,7 @@ export default function GEETwinPage() {
               <h1 className="text-lg font-bold text-white tracking-tight">
                 GOOGLE EARTH ENGINE (GEE) FLOOD TWIN
               </h1>
-              <span className="px-2 py-0.2 text-[9px] font-mono bg-white/10 text-cyan-400 border border-white/10 rounded font-medium">
+              <span className="px-2 py-0.5 text-[9px] font-mono bg-cyan-500/10 text-cyan-400 border border-cyan-400/20 rounded font-semibold">
                 NASADEM 30m + ERA5
               </span>
             </div>
@@ -256,17 +143,17 @@ export default function GEETwinPage() {
 
       {/* Coastal Sector Selector Bar */}
       <div className="bg-[#0B0F1A] p-4 rounded-2xl border border-white/[0.08] space-y-3">
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <span className="text-xs font-mono text-zinc-400 font-medium uppercase tracking-wider flex items-center space-x-2">
             <MapPin className="w-3.5 h-3.5 text-cyan-400" />
             <span>SELECT MONITORED COASTAL SECTOR:</span>
           </span>
           <span className="text-[11px] font-mono text-zinc-400">
-            Active: <strong className="text-white">{selectedLocation.name}</strong>
+            Active: <strong className="text-white">{selectedLocation.name}</strong> ({selectedLocation.lat}°N, {selectedLocation.lon}°E)
           </span>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
           {PRESET_COASTAL_LOCATIONS.map((loc) => {
             const isSelected = selectedLocation.name === loc.name;
             return (
@@ -275,11 +162,11 @@ export default function GEETwinPage() {
                 onClick={() => handleLocationChange(loc)}
                 className={`p-2.5 rounded-xl text-left transition-all border ${
                   isSelected
-                    ? "bg-cyan-500/10 border-cyan-400/40 text-white"
+                    ? "bg-cyan-500/10 border-cyan-400/40 text-white shadow-[0_0_10px_rgba(0,229,255,0.1)]"
                     : "bg-white/5 border-white/[0.06] text-zinc-400 hover:text-white hover:bg-white/10"
                 }`}
               >
-                <div className="text-xs font-semibold truncate">{loc.name}</div>
+                <div className="text-xs font-semibold truncate">{loc.name.split(" (")[0]}</div>
                 <div className="text-[10px] text-zinc-500 font-mono mt-0.5">{loc.lat}°N, {loc.lon}°E</div>
               </button>
             );
@@ -350,100 +237,85 @@ export default function GEETwinPage() {
           <span className="text-2xl font-bold text-red-400 font-mono block">
             {inundation?.flooded_zones_count || 0} Cells
           </span>
-          <span className="text-[11px] text-zinc-500 block">Elevation &lt; {surgeHeight}m AMSL</span>
+          <span className="text-[11px] text-zinc-500 block">Elevation &lt; {surgeHeight.toFixed(1)}m AMSL</span>
         </div>
 
         <div className="bg-[#0B0F1A] p-4 rounded-xl border border-white/[0.08] space-y-1">
           <span className="text-xs text-zinc-400 block font-mono">Safe Shelter Zones</span>
           <span className="text-2xl font-bold text-emerald-400 font-mono block">
-            {inundation?.safe_zones_count || 0} Cells
+            {inundation?.safe_zones_count || inundation?.safe_shelter_zones?.length || 0} Ridges
           </span>
-          <span className="text-[11px] text-zinc-500 block">Clearance &gt; +1.2m above surge</span>
+          <span className="text-[11px] text-zinc-500 block">Clearance &gt; +1.0m above surge</span>
         </div>
       </div>
 
-      {/* Main Interactive Display: Leaflet GIS Map & Cell Grid Analysis */}
-      <div className="bg-black/85 backdrop-blur-2xl p-6 rounded-3xl border border-white/10 space-y-4 shadow-2xl">
+      {/* Main Display: Leaflet GIS Map & Cell Grid Analysis */}
+      <div className="bg-black/85 backdrop-blur-2xl p-4 sm:p-6 rounded-3xl border border-white/10 space-y-4 shadow-2xl">
         
         {/* Navigation Tabs */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
-          <div className="flex items-center space-x-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setActiveTab("map")}
-              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
                 activeTab === "map" ? "bg-cyan-500 text-black shadow-lg" : "text-zinc-400 hover:text-white bg-white/5"
               }`}
             >
-              Interactive Inundation GIS Map
+              <MapIcon className="w-3.5 h-3.5" />
+              <span>Interactive Inundation GIS Map</span>
             </button>
             <button
               onClick={() => setActiveTab("grid")}
-              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
                 activeTab === "grid" ? "bg-cyan-500 text-black shadow-lg" : "text-zinc-400 hover:text-white bg-white/5"
               }`}
             >
-              Cell-by-Cell Elevation Matrix ({inundation?.total_cells_evaluated || 400} Cells)
+              <Activity className="w-3.5 h-3.5" />
+              <span>Cell-by-Cell Elevation Matrix ({inundation?.total_cells_evaluated || 400} Cells)</span>
             </button>
             <button
               onClick={() => setActiveTab("shelters")}
-              className={`px-4 py-2 rounded-2xl text-xs font-bold transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 ${
                 activeTab === "shelters" ? "bg-cyan-500 text-black shadow-lg" : "text-zinc-400 hover:text-white bg-white/5"
               }`}
             >
-              Safe Shelter High Grounds ({inundation?.safe_shelter_zones?.length || 0})
+              <Shield className="w-3.5 h-3.5" />
+              <span>Safe Shelter High Grounds ({inundation?.safe_shelter_zones?.length || 0})</span>
             </button>
           </div>
 
           <div className="flex items-center space-x-3 text-xs font-mono text-zinc-400">
             <span className="flex items-center space-x-1.5">
-              <span className="w-3 h-3 rounded-full bg-red-500/80 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />
               <span>&gt;2.5m Surge</span>
             </span>
             <span className="flex items-center space-x-1.5">
-              <span className="w-3 h-3 rounded-full bg-cyan-400/80 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block" />
               <span>1.0-2.5m Surge</span>
             </span>
             <span className="flex items-center space-x-1.5">
-              <span className="w-3 h-3 rounded-full bg-emerald-500/80 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
               <span>Safe High Ground</span>
             </span>
           </div>
         </div>
 
-        {/* Tab 1: Leaflet Interactive Map */}
+        {/* Tab 1: Leaflet Interactive GIS Map */}
         {activeTab === "map" && (
-          <div className="space-y-3">
-            <div
-              ref={mapContainerRef}
-              className="w-full h-[520px] rounded-2xl overflow-hidden border border-white/10 bg-[#070A12] shadow-inner"
-            />
-            {selectedCell && (
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                <div>
-                  <span className="text-[10px] font-mono text-cyan-accent uppercase block">SELECTED CELL TELEMETRY</span>
-                  <strong className="text-white text-sm">
-                    {selectedCell.cell_id} ({selectedCell.lat}°N, {selectedCell.lon}°E)
-                  </strong>
-                </div>
-                <div className="flex items-center space-x-4 font-mono">
-                  <span>Ground Elevation: <strong className="text-white">{selectedCell.elevation_m}m AMSL</strong></span>
-                  <span>Surge Water Depth: <strong className={selectedCell.is_flooded ? "text-red-400" : "text-emerald-400"}>{selectedCell.surge_depth_m}m</strong></span>
-                  <span className={`px-2.5 py-1 rounded-full font-bold text-[10px] ${
-                    selectedCell.is_flooded ? "bg-red-500/20 text-red-300 border border-red-500/40" : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                  }`}>
-                    {selectedCell.risk_level}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
+          <GEEInundationMap
+            location={selectedLocation}
+            surgeHeight={surgeHeight}
+            inundation={inundation}
+            selectedCell={selectedCell}
+            onSelectCell={(cell) => setSelectedCell(cell)}
+          />
         )}
 
-        {/* Tab 2: Genuine Cell-by-Cell Grid Matrix */}
+        {/* Tab 2: Cell-by-Cell Grid Matrix */}
         {activeTab === "grid" && (
           <div className="space-y-4">
-            <div className="grid grid-cols-4 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-20 gap-1.5 max-h-[460px] overflow-y-auto p-3 rounded-2xl bg-[#070A12] border border-white/10">
-              {(inundation?.flooded_zones || []).concat(inundation?.safe_shelter_zones || []).map((cell: any, idx: number) => {
+            <div className="grid grid-cols-4 sm:grid-cols-8 md:grid-cols-12 lg:grid-cols-20 gap-1.5 max-h-[480px] overflow-y-auto p-3.5 rounded-2xl bg-[#070A12] border border-white/10">
+              {allCells.map((cell: any, idx: number) => {
                 const isSelected = selectedCell?.cell_id === cell.cell_id;
                 const isFlooded = cell.is_flooded;
                 const colorBg = isFlooded 
@@ -467,14 +339,14 @@ export default function GEETwinPage() {
             </div>
 
             {selectedCell && (
-              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 flex items-center justify-between text-xs">
+              <div className="p-4 rounded-2xl bg-[#0B0F1A] border border-white/10 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
                 <div>
-                  <span className="text-[10px] font-mono text-cyan-accent block">SELECTED CELL DETAILS</span>
-                  <strong className="text-white">{selectedCell.cell_id} • Coordinates: {selectedCell.lat}°N, {selectedCell.lon}°E</strong>
+                  <span className="text-[10px] font-mono text-cyan-400 uppercase tracking-wider block">SELECTED CELL DETAILS</span>
+                  <strong className="text-white text-sm">{selectedCell.cell_id} • Coordinates: {selectedCell.lat}°N, {selectedCell.lon}°E</strong>
                 </div>
-                <div className="text-right font-mono">
-                  <span className="block text-zinc-300">AMSL Ground Elevation: <b>{selectedCell.elevation_m}m</b></span>
-                  <span className="block text-cyan-accent font-bold">Surge Water Depth: {selectedCell.surge_depth_m}m</span>
+                <div className="text-right font-mono space-y-0.5">
+                  <span className="block text-zinc-300">AMSL Ground Elevation: <b className="text-white">{selectedCell.elevation_m}m</b></span>
+                  <span className="block text-cyan-400 font-bold">Surge Water Depth: {selectedCell.surge_depth_m}m ({selectedCell.risk_level})</span>
                 </div>
               </div>
             )}
@@ -483,25 +355,30 @@ export default function GEETwinPage() {
 
         {/* Tab 3: Safe Shelter High Grounds */}
         {activeTab === "shelters" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {(inundation?.safe_shelter_zones || []).map((shelter: any, idx: number) => (
-              <div key={idx} className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-white flex items-center space-x-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                    <span>Safe High Ground Ridge #{idx + 1}</span>
-                  </span>
-                  <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 font-bold">
-                    +{(shelter.elevation_m - surgeHeight).toFixed(1)}m ABOVE SURGE
-                  </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+            {(inundation?.safe_shelter_zones || []).map((shelter: any, idx: number) => {
+              const clearance = (shelter.elevation_m - surgeHeight).toFixed(1);
+              return (
+                <div key={idx} className="p-4 rounded-2xl bg-emerald-950/20 border border-emerald-500/30 space-y-2.5 hover:border-emerald-400/50 transition-all">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-white flex items-center space-x-1.5">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                      <span>Safe High Ground Ridge #{idx + 1}</span>
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 font-bold">
+                      +{clearance}m ABOVE SURGE
+                    </span>
+                  </div>
+                  <div className="text-xs text-zinc-300 space-y-1 font-mono">
+                    <p>Coordinates: <strong className="text-white">{shelter.lat}°N, {shelter.lon}°E</strong></p>
+                    <p>Ground Elevation: <strong className="text-emerald-400">{shelter.elevation_m}m AMSL</strong></p>
+                    <p className="text-[10px] text-zinc-400 pt-1 border-t border-white/5">
+                      Designated staging zone for NDRF inflatable boats & food logistics depot.
+                    </p>
+                  </div>
                 </div>
-                <div className="text-xs text-zinc-300 space-y-1 font-mono">
-                  <p>Coordinates: {shelter.lat}°N, {shelter.lon}°E</p>
-                  <p>Ground Elevation: <strong className="text-emerald-400">{shelter.elevation_m}m AMSL</strong></p>
-                  <p className="text-[10px] text-zinc-400">Suitable for NDRF Stilt Shelter staging & logistics depot.</p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
